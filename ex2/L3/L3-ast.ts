@@ -48,7 +48,7 @@ import { Sexp, Token } from "s-expression";
 
 export type Exp = DefineExp | CExp;
 export type AtomicExp = NumExp | BoolExp | StrExp | PrimOp | VarRef;
-export type CompoundExp = AppExp | IfExp | ProcExp | LetExp | LitExp; //???? need to add here class ?
+export type CompoundExp = AppExp | IfExp | ProcExp | LetExp | LitExp | ClassExp; //added here 
 export type CExp =  AtomicExp | CompoundExp;
 
 export type Program = {tag: "Program"; exps: Exp[]; }
@@ -68,8 +68,6 @@ export type LetExp = {tag: "LetExp"; bindings: Binding[]; body: CExp[]; }
 // L3
 export type LitExp = {tag: "LitExp"; val: SExpValue; }
 export type ClassExp = {tag: "ClassExp"; fields: VarDecl[]; methods: Binding[]; } // why ;???
-
-
 
 // Type value constructors for disjoint types
 export const makeProgram = (exps: Exp[]): Program => ({tag: "Program", exps: exps});
@@ -160,7 +158,7 @@ export const parseL3CompoundExp = (op: Sexp, params: Sexp[]): Result<Exp> =>
     op === "define"? parseDefine(params) :
     parseL3CompoundCExp(op, params);
 
-// CompoundCExp -> IfExp | ProcExp | LetExp | LitExp | AppExp
+// CompoundCExp -> IfExp | ProcExp | LetExp | LitExp | AppExp | ClassExp
 export const parseL3CompoundCExp = (op: Sexp, params: Sexp[]): Result<CExp> =>
     isString(op) && isSpecialForm(op) ? parseL3SpecialForm(op, params) :
     parseAppExp(op, params);
@@ -177,8 +175,8 @@ export const parseL3SpecialForm = (op: Sexp, params: Sexp[]): Result<CExp> =>
     op === "quote" ? 
         isNonEmptyList<Sexp>(params) ? parseLitExp(first(params)) :
         makeFailure(`Bad quote exp: ${params}`) :
-    op == "class" ?
-        isNonEmptyList<Sexp>(params) ? parseClassExp(first(params), rest(params)) :
+    op === "class" ?
+        isNonEmptyList<Sexp>(params) ? parseClassExp(first(params), rest(params)) : // the first should be a variable and the rest fields and methods
         makeFailure(`Bad class exp: ${params}`) :
     makeFailure("Never");
 
@@ -222,7 +220,7 @@ const isPrimitiveOp = (x: string): boolean =>
      "number?", "boolean?", "symbol?", "string?"].includes(x);
 
 const isSpecialForm = (x: string): boolean =>
-    ["if", "lambda", "let", "quote"].includes(x);
+    ["if", "lambda", "let", "quote", "class"].includes(x);
 
 const parseAppExp = (op: Sexp, params: Sexp[]): Result<AppExp> =>
     bind(parseL3CExp(op), (rator: CExp) => 
@@ -266,9 +264,13 @@ export const parseLitExp = (param: Sexp): Result<LitExp> =>
     mapv(parseSExp(param), (sexp: SExpValue) => 
          makeLitExp(sexp));
 
-export const parseClassExp = (fields:Sexp, methods:Sexp[]): Result<ClassExp> =>
+
+//    ( class ( <var>+ ) ( <binding>+ ) ) 
+//     ClassExp(fields:VarDecl[], methods:Binding[]))
+export const parseClassExp = (fields:Sexp, methods: Sexp[]): Result<ClassExp> =>
     mapv(parseSExp(methods), (sexp: SExpValue) => 
         makeClassExp(fields, methods));
+
 
 export const isDottedPair = (sexps: Sexp[]): boolean =>
     sexps.length === 3 && 
